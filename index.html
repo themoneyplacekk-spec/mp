@@ -39,86 +39,105 @@
       </button>
     </form>
   </div>
+<script>
+  const MY_LIFF_ID  = "2011432830-qKeET5Fd";
+  const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxjPIGepS85gvULfQ5Oor_C-HE3HgOWIsgKwEmam6Gf10T7y_cS0vZ_-g79bg4XLsRA/exec"; // ต้องลงท้าย /exec
 
-  <script>
-    const MY_LIFF_ID = "2011432830-qKeET5Fd";
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxjPIGepS85gvULfQ5Oor_C-HE3HgOWIsgKwEmam6Gf10T7y_cS0vZ_-g79bg4XLsRA/exec"; // Web App URL
+  function setStatus(html, color) {
+    const el = document.getElementById('status-text');
+    el.innerHTML = html;
+    el.className = `text-xs mt-1 break-all ${color}`;
+  }
 
-    function setStatus(html, color) {
-      const el = document.getElementById('status-text');
-      el.innerHTML = html;
-      el.className = `text-xs mt-1 break-all ${color}`;
+  /* ---------- LIFF INIT ---------- */
+  async function initializeLiff() {
+    try {
+      await liff.init({ liffId: MY_LIFF_ID, withLoginOnExternalBrowser: true });
+      if (!liff.isLoggedIn()) { liff.login({ redirectUri: window.location.href }); return; }
+      const profile = await liff.getProfile();
+      document.getElementById('userId').value = profile.userId;
+      if (!document.getElementById('name').value) {
+        document.getElementById('name').value = profile.displayName || '';
+      }
+      setStatus(`✅ บัญชี: <b>${profile.displayName}</b><br><span class="text-slate-500 text-[11px]">LINE UID: ${profile.userId}</span>`, "text-emerald-600");
+    } catch (err) {
+      setStatus(`❌ ${err.message}`, "text-rose-600");
     }
+  }
+  window.addEventListener('DOMContentLoaded', initializeLiff);
 
-    async function initializeLiff() {
-      try {
-        await liff.init({ liffId: MY_LIFF_ID, withLoginOnExternalBrowser: true });
-        if (!liff.isLoggedIn()) {
-          liff.login({ redirectUri: window.location.href });
-          return;
-        }
-        const profile = await liff.getProfile();
-        document.getElementById('userId').value = profile.userId;
-        if (!document.getElementById('name').value) {
-          document.getElementById('name').value = profile.displayName || '';
-        }
-        setStatus(`✅ บัญชี: <b>${profile.displayName}</b><br><span class="text-slate-500 text-[11px]">LINE UID: ${profile.userId}</span>`, "text-emerald-600");
-      } catch (err) {
-        setStatus(`❌ ${err.message}`, "text-rose-600");
-      }
-    }
-    window.addEventListener('DOMContentLoaded', initializeLiff);
+  /* ---------- JSONP HELPER (แก้ปัญหา Failed to fetch) ---------- */
+  function jsonpRequest(baseUrl, params, timeoutMs = 15000) {
+    return new Promise((resolve, reject) => {
+      const cbName = 'gasCallback_' + Date.now() + Math.floor(Math.random() * 1000);
+      const query = Object.keys(params)
+        .map(k => encodeURIComponent(k) + '=' + encodeURIComponent(params[k]))
+        .join('&');
 
-    document.getElementById('regForm').addEventListener('submit', async function(e) {
-      e.preventDefault();
-      const userId = document.getElementById('userId').value;
-      if (!userId) {
-        Swal.fire({ icon: 'warning', title: 'ไม่พบ LINE User ID', text: 'กรุณาเปิดผ่านแอป LINE', confirmButtonColor: '#f59e0b' });
-        return;
+      const script = document.createElement('script');
+      const timer = setTimeout(() => { cleanup(); reject(new Error('หมดเวลาเชื่อมต่อเซิร์ฟเวอร์ (Timeout)')); }, timeoutMs);
+
+      function cleanup() {
+        clearTimeout(timer);
+        delete window[cbName];
+        if (script.parentNode) script.parentNode.removeChild(script);
       }
 
-      const btn = document.getElementById('submitBtn');
-      btn.disabled = true;
-      btn.innerText = "กำลังบันทึก...";
-
-      const payload = {
-        action: 'register',
-        roomNo: document.getElementById('roomNo').value.trim(),
-        name: document.getElementById('name').value.trim(),
-        phone: document.getElementById('phone').value.trim(),
-        userId: userId
-      };
-
-      try {
-        // ใช้ Content-Type: text/plain เพื่อเลี่ยง CORS Preflight ของ Apps Script
-        const res = await fetch(GAS_API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload)
-        });
-        const result = await res.json();
-
-        if (result.success) {
-          await Swal.fire({
-            icon: 'success',
-            title: 'ลงทะเบียนสำเร็จ!',
-            html: `<div class="text-left text-sm bg-slate-50 p-3 rounded-lg border space-y-1">
-                     <div><b>ห้อง:</b> ${payload.roomNo}</div>
-                     <div><b>ชื่อ:</b> ${payload.name}</div>
-                     <div class="pt-1 border-t text-xs break-all text-slate-500"><b>LINE UID:</b><br><code class="text-blue-600">${result.userId}</code></div>
-                   </div>`,
-            confirmButtonColor: '#2563eb'
-          });
-          if (liff.isInClient()) liff.closeWindow();
-        } else {
-          throw new Error(result.message || 'บันทึกข้อมูลไม่สำเร็จ');
-        }
-      } catch (err) {
-        Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message, confirmButtonColor: '#ef4444' });
-        btn.disabled = false;
-        btn.innerText = "ยืนยันการลงทะเบียน";
-      }
+      window[cbName] = (data) => { cleanup(); resolve(data); };
+      script.onerror = () => { cleanup(); reject(new Error('เชื่อมต่อ Apps Script ไม่ได้ (ตรวจสอบสิทธิ์ Anyone)')); };
+      script.src = `${baseUrl}?${query}&callback=${cbName}`;
+      document.body.appendChild(script);
     });
-  </script>
-</body>
+  }
+
+  /* ---------- SUBMIT ---------- */
+  document.getElementById('regForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+
+    const userId = document.getElementById('userId').value;
+    if (!userId) {
+      Swal.fire({ icon: 'warning', title: 'ไม่พบ LINE User ID', text: 'กรุณาเปิดหน้านี้ผ่านแอป LINE', confirmButtonColor: '#f59e0b' });
+      return;
+    }
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.innerText = "กำลังบันทึก...";
+
+    const payload = {
+      action : 'register',
+      roomNo : document.getElementById('roomNo').value.trim(),
+      name   : document.getElementById('name').value.trim(),
+      phone  : document.getElementById('phone').value.trim(),
+      userId : userId
+    };
+
+    try {
+      const res = await jsonpRequest(GAS_API_URL, payload);
+      if (!res.success) throw new Error(res.message || 'บันทึกข้อมูลไม่สำเร็จ');
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'ลงทะเบียนสำเร็จ!',
+        html: `<div class="text-left text-sm bg-slate-50 p-3 rounded-lg border space-y-1">
+                 <div><b>ห้อง:</b> ${payload.roomNo}</div>
+                 <div><b>ชื่อ:</b> ${payload.name}</div>
+                 <div><b>เบอร์โทร:</b> ${payload.phone}</div>
+                 <div class="pt-1 border-t text-xs break-all text-slate-500">
+                   <b>LINE UID:</b><br><code class="text-blue-600">${res.userId}</code>
+                 </div>
+               </div>`,
+        confirmButtonText: 'ตกลง',
+        confirmButtonColor: '#2563eb'
+      });
+      if (liff.isInClient()) liff.closeWindow();
+
+    } catch (err) {
+      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message, confirmButtonColor: '#ef4444' });
+      btn.disabled = false;
+      btn.innerText = "ยืนยันการลงทะเบียน";
+    }
+  });
+</script>
+ </body>
 </html>
