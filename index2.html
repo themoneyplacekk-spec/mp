@@ -198,8 +198,10 @@ async function loadBillsData() {
       <b>รอบบิล: ${b.month}</b><br>
       ยอดรวม: <b>${Number(b.grandTotal).toLocaleString()} บาท</b><br>
       กำหนดชำระ: ${b.dueText}<br>
+      <br>  
       ** โอน PromptPay 089-451-5491<br>
       ** เฉลิมเกียรติ วิไลรัตนาภรณ์<br>
+      <br>
       สถานะ: <span class="${b.status === 'Paid' ? 'status-paid' : 'status-pending'}">${b.status}</span>
     </div>
   `).join('');
