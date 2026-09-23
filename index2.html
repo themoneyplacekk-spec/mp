@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>ระบบบริหารจัดการหอพัก</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  * { box-sizing: border-box; font-family: -apple-system, "Noto Sans Thai", sans-serif; }
+  body { margin: 0; background: #F5F7FB; color: #111; padding-bottom: 30px; }
+  .wrap { max-width: 480px; margin: 0 auto; padding: 16px; }
+  .card { background: #fff; border-radius: 14px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,.06); margin-bottom: 14px; }
+  h2 { margin: 0 0 4px; font-size: 20px; color: #2E86C1; }
+  .sub { color: #888; font-size: 13px; margin-bottom: 18px; }
+  label { display: block; font-size: 13px; color: #555; margin: 14px 0 6px; }
+  input, select, textarea { width: 100%; padding: 12px; border: 1px solid #DDE3EC; border-radius: 10px; font-size: 15px; }
+  textarea { min-height: 90px; resize: vertical; }
+  button { width: 100%; padding: 14px; border: 0; border-radius: 10px; background: #2E86C1; color: #fff; font-size: 16px; font-weight: 600; margin-top: 18px; cursor: pointer; }
+  button:disabled { background: #B9C6D8; }
+  .msg { padding: 12px; border-radius: 10px; font-size: 14px; margin-top: 14px; display: none; white-space: pre-line; }
+  .ok { background: #E8F5E9; color: #1B7F3B; }
+  .err { background: #FDECEA; color: #C1352B; }
+  .bill-item { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+  .bill-item b { color: #2E86C1; }
+  .status-paid { color: #27AE60; font-weight: bold; }
+  .status-pending { color: #E74C3C; font-weight: bold; }
+  .section { display: none; }
+  .active { display: block; }
+  .preview { width: 100%; max-height: 200px; object-fit: contain; margin-top: 10px; display: none; border-radius: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ช่อง A: ลงทะเบียน -->
+  <div id="sec-register" class="section card">
+    <h2>📋 ลงทะเบียนผู้เช่า</h2>
+    <div class="sub">ผูกบัญชี LINE กับห้องพักของคุณ</div>
+    <label>เลขห้อง *</label><input id="reg-room" placeholder="เช่น 101">
+    <label>ชื่อ-นามสกุล *</label><input id="reg-name" placeholder="ชื่อ-นามสกุลจริง">
+    <label>เบอร์โทรศัพท์ *</label><input id="reg-phone" type="tel" placeholder="08xxxxxxxx">
+    <button onclick="submitRegister()">ยืนยันลงทะเบียน</button>
+    <div class="msg" id="msg-register"></div>
+  </div>
+
+  <!-- ช่อง B: ออกบิล / ยอดค้าง -->
+  <div id="sec-bill" class="section card">
+    <h2>🧾 บิลค่าเช่าและยอดค้าง</h2>
+    <div class="sub">รายการบิลประจำเดือนของคุณ</div>
+    <div id="bill-container">กำลังโหลดข้อมูล...</div>
+  </div>
+
+  <!-- ช่อง C: ส่งสลิปโอนเงิน -->
+  <div id="sec-slip" class="section card">
+    <h2>📤 ส่งสลิปการโอนเงิน</h2>
+    <div class="sub">แนบหลักฐานการชำระเงินประจำเดือน</div>
+    <label>เลือกบิลที่ต้องการชำระ *</label>
+    <select id="slip-bill-select"><option value="">-- กำลังโหลดบิล --</option></select>
+    <label>รูปภาพสลิป *</label>
+    <input type="file" id="slip-file" accept="image/*" onchange="previewImage(event)">
+    <img id="slip-preview" class="preview">
+    <button onclick="submitSlip()">ยืนยันการส่งสลิป</button>
+    <div class="msg" id="msg-slip"></div>
+  </div>
+
+  <!-- ช่อง D: แจ้งซ่อม / ปัญหา -->
+  <div id="sec-repair" class="section card">
+    <h2>🛠️ แจ้งซ่อม / แจ้งปัญหา</h2>
+    <div class="sub">แจ้งเจ้าหน้าที่เข้าตรวจสอบภายในห้องพัก</div>
+    <label>หมวดหมู่ปัญหา *</label>
+    <select id="repair-cat">
+      <option value="ไฟฟ้า">ไฟฟ้า / หลอดไฟ / ปลั๊ก</option>
+      <option value="ประปา">ประปา / ก๊อกน้ำ / ชักโครก</option>
+      <option value="แอร์">เครื่องปรับอากาศ</option>
+      <option value="เฟอร์นิเจอร์">เฟอร์นิเจอร์ชำรุด</option>
+      <option value="อื่นๆ">อื่นๆ</option>
+    </select>
+    <label>รายละเอียดเพิ่มเติม *</label>
+    <textarea id="repair-detail" placeholder="ระบุอาการหรือจุดที่ชำรุด..."></textarea>
+    <label>รูปภาพประกอบ (ถ้ามี)</label>
+    <input type="file" id="repair-file" accept="image/*">
+    <button onclick="submitRepair()">ส่งเรื่องแจ้งซ่อม</button>
+    <div class="msg" id="msg-repair"></div>
+  </div>
+
+  <!-- ช่อง E: ระเบียบอพาร์ทเมนต์ -->
+  <div id="sec-rules" class="section card">
+    <h2>📜 ระเบียบหอพัก</h2>
+    <div class="sub">ข้อปฏิบัติเพื่อความสงบเรียบร้อย</div>
+    <div style="font-size: 14px; line-height: 1.6; color: #444;">
+      1. ห้ามส่งเสียงดังรบกวนผู้อื่นหลังเวลา 22.00 น.<g></g><br>
+      2. ห้ามสูบบุหรี่ภายในห้องพัก (สูบบุหรี่ได้ที่บริเวณดาดฟ้าเท่านั้น)<br>
+      3. ห้ามเลี้ยงสัตว์เลี้ยงทุกชนิดภายในอาคารหอพัก<br>
+      4. การทิ้งขยะ กรุณามัดถุงให้เรียบร้อยและทิ้งในจุดที่จัดเตรียมไว้<br>
+      5. ชำระค่าเช่าภายในวันที่ 5 ของทุกเดือน หากเกินกำหนดมีค่าปรับวันละ 50 บาท
+    </div>
+  </div>
+
+  <!-- ช่อง F: ติดต่อเจ้าหน้าที่ -->
+  <div id="sec-contact" class="section card">
+    <h2>📞 ติดต่อเจ้าหน้าที่</h2>
+    <div class="sub">ช่องทางติดต่อเร่งด่วน</div>
+    <div style="font-size: 15px; line-height: 1.8; color: #333;">
+      🏢 <b>สำนักงานหอพัก:</b> เปิดให้บริการ 08.00 - 18.00 น.<br>
+      📞 <b>เบอร์โทรศัพท์:</b> <a href="tel:0812345678" style="color:#2E86C1;">081-234-5678</a><br>
+      💬 <b>LINE Official:</b> @yourdorm<br><br>
+      <button style="background:#27AE60; margin-top:0;" onclick="liff.openWindow({url:'https://line.me/ti/p/~yourdorm', external:true})">แชทคุยกับแอดมิน</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ================= CONFIG ================= */
+const LIFF_ID = "200xxxxxxxx-xxxxxxxx"; // ใส่ LIFF ID ของคุณ
+const GAS_URL = "https://script.google.com/macros/s/AKfycby.../exec"; // Web App URL
+const SECRET  = "your-api-secret-string"; // รหัสผ่านลับใน Config.gs
+/* ========================================== */
+
+let idToken = '', userId = '';
+
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    await liff.init({ liffId: LIFF_ID });
+    if (!liff.isLoggedIn()) { liff.login(); return; }
+
+    idToken = liff.getIDToken();
+    const profile = await liff.getProfile();
+    userId = profile.userId;
+
+    // อ่าน Query Parameter ?page=... เพื่อสลับหน้าจอ
+    const urlParams = new URLSearchParams(window.location.search);
+    const page = urlParams.get('page') || 'register';
+    
+    showSection(page);
+
+    // โหลดข้อมูลเฉพาะหน้า
+    if (page === 'register') loadRegisterData();
+    if (page === 'bill') loadBillsData();
+    if (page === 'slip') loadSlipBillsData();
+
+  } catch (err) {
+    alert('LIFF Initialization Failed: ' + err.message);
+  }
+});
+
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
+  const target = document.getElementById('sec-' + name);
+  if (target) target.classList.add('active');
+  else document.getElementById('sec-register').classList.add('active');
+}
+
+async function callApi(payload) {
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ secret: SECRET, idToken: idToken, userId: userId }, payload))
+    });
+    return await res.json();
+  } catch (e) {
+    return { ok: false, message: 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ: ' + e.message };
+  }
+}
+
+// --- Logic ช่อง A ---
+async function loadRegisterData() {
+  const res = await callApi({ action: 'get_tenant_info' });
+  if (res.ok && res.tenant) {
+    document.getElementById('reg-room').value = res.tenant.room || '';
+    document.getElementById('reg-name').value = res.tenant.name || '';
+    document.getElementById('reg-phone').value = res.tenant.phone || '';
+  }
+}
+async function submitRegister() {
+  const room = document.getElementById('reg-room').value.trim();
+  const name = document.getElementById('reg-name').value.trim();
+  const phone = document.getElementById('reg-phone').value.trim();
+  if(!room || !name || !phone) return showMsg('msg-register', 'กรุณากรอกข้อมูลให้ครบถ้วน', false);
+
+  const res = await callApi({ action: 'register', room, name, phone });
+  showMsg('msg-register', res.message, res.ok);
+  if(res.ok) setTimeout(() => liff.closeWindow(), 2000);
+}
+
+// --- Logic ช่อง B ---
+async function loadBillsData() {
+  const container = document.getElementById('bill-container');
+  const res = await callApi({ action: 'get_my_bills' });
+  if (!res.ok) { container.innerHTML = `<p style="color:red;">${res.message}</p>`; return; }
+  if (!res.bills.length) { container.innerHTML = '<p>ไม่พบประวัติบิลในระบบ</p>'; return; }
+
+  container.innerHTML = res.bills.map(b => `
+    <div class="bill-item">
+      <b>รอบบิล: ${b.month}</b><br>
+      ยอดรวม: <b>${Number(b.grandTotal).toLocaleString()} บาท</b><br>
+      กำหนดชำระ: ${b.dueText}<br>
+      สถานะ: <span class="${b.status === 'Paid' ? 'status-paid' : 'status-pending'}">${b.status}</span>
+    </div>
+  `).join('');
+}
+
+// --- Logic ช่อง C ---
+async function loadSlipBillsData() {
+  const select = document.getElementById('slip-bill-select');
+  const res = await callApi({ action: 'get_my_bills' });
+  if (!res.ok || !res.bills) { select.innerHTML = '<option value="">ไม่พบข้อมูลบิล</option>'; return; }
+  
+  const unpaid = res.bills.filter(b => b.status !== 'Paid');
+  if (!unpaid.length) { select.innerHTML = '<option value="">ไม่มีบิลค้างชำระ</option>'; return; }
+
+  select.innerHTML = unpaid.map(b => `<option value="${b.billId}">${b.month} - ยอด ${Number(b.grandTotal).toLocaleString()} บ.</option>`).join('');
+}
+
+function previewImage(event) {
+  const reader = new FileReader();
+  reader.onload = function() {
+    const output = document.getElementById('slip-preview');
+    output.src = reader.result;
+    output.style.display = 'block';
+  };
+  reader.readAsDataURL(event.target.files[0]);
+}
+
+async function submitSlip() {
+  const billId = document.getElementById('slip-bill-select').value;
+  const fileInput = document.getElementById('slip-file');
+  if (!billId) return showMsg('msg-slip', 'กรุณาเลือกบิลที่ต้องการชำระ', false);
+  if (!fileInput.files[0]) return showMsg('msg-slip', 'กรุณาแนบรูปสลิปโอนเงิน', false);
+
+  showMsg('msg-slip', 'กำลังอัปโหลดสลิป...', true);
+  const base64 = await toBase64(fileInput.files[0]);
+  
+  const res = await callApi({ action: 'upload_slip', billId: billId, imageBase64: base64, mimeType: fileInput.files[0].type });
+  showMsg('msg-slip', res.message, res.ok);
+  if(res.ok) setTimeout(() => liff.closeWindow(), 2000);
+}
+
+// --- Logic ช่อง D ---
+async function submitRepair() {
+  const cat = document.getElementById('repair-cat').value;
+  const detail = document.getElementById('repair-detail').value.trim();
+  const fileInput = document.getElementById('repair-file');
+  if (!detail) return showMsg('msg-repair', 'กรุณาระบุรายละเอียดปัญหา', false);
+
+  showMsg('msg-repair', 'กำลังส่งเรื่องแจ้งซ่อม...', true);
+  let base64 = '';
+  if (fileInput.files[0]) {
+    base64 = await toBase64(fileInput.files[0]);
+  }
+
+  const res = await callApi({ action: 'submit_repair', detail: `[${cat}] ${detail}`, imageBase64: base64, mimeType: fileInput.files[0] ? fileInput.files[0].type : '' });
+  showMsg('msg-repair', res.message, res.ok);
+  if(res.ok) setTimeout(() => liff.closeWindow(), 2000);
+}
+
+// Helper ย่อ/แปลงไฟล์เป็น Base64
+function toBase64(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result.split(',')[1]);
+    reader.readAsDataURL(file);
+  });
+}
+
+function showMsg(id, text, ok) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'msg ' + (ok ? 'ok' : 'err');
+  el.style.display = 'block';
+}
+</script>
+</body>
+</html>
