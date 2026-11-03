@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบพิมพ์ใบเสร็จรับเงิน</title>
+  <style>
+    /* ตั้งค่าหน้าจอให้อยู่ตรงกลาง */
+    body {
+      font-family: 'Sarabun', sans-serif, system-ui;
+      background-color: #f4f6f9;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    /* กล่องข้อความและปุ่ม */
+    .card {
+      background: white;
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      text-align: center;
+      max-width: 400px;
+      width: 100%;
+    }
+
+    h2 {
+      color: #333;
+      margin-bottom: 24px;
+      font-size: 24px;
+    }
+
+    /* สไตล์ปุ่มพิมพ์ใบเสร็จ */
+    .print-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 14px;
+      background-color: #1a73e8;
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-size: 18px;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+      transition: background-color 0.2s, transform 0.1s;
+      box-sizing: border-box;
+    }
+
+    .print-btn:hover {
+      background-color: #1557b0;
+    }
+
+    .print-btn:active {
+      transform: scale(0.98);
+    }
+
+    /* สถานะกำลังประมวลผล */
+    .status-container {
+      margin-top: 20px;
+      height: 24px;
+    }
+
+    .loading-text {
+      color: #666;
+      font-size: 14px;
+      display: none;
+      animation: blink 1.5s infinite;
+    }
+
+    @keyframes blink {
+      0% { opacity: 0.4; }
+      50% { opacity: 1; }
+      100% { opacity: 0.4; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>ออกเอกสารใบเสร็จ</h2>
+    
+    <!-- ปุ่มสำหรับกดสั่งพิมพ์ -->
+    <button class="print-btn" id="btnPrint" onclick="startPrintProcess(event)">
+      🖨️ พิมพ์ใบเสร็จ
+    </button>
+
+    <!-- พื้นที่แสดงสถานะโหลด -->
+    <div class="status-container">
+      <span id="loadingStatus" class="loading-text">🔄 กำลังสร้างไฟล์ PDF รวม กรุณารอสักครู่...</span>
+    </div>
+  </div>
+
+  <script>
+    function startPrintProcess(event) {
+      event.preventDefault(); // ป้องกันการรีเฟรชหน้าจอ
+      
+      // ⚠️ ใส่ URL Web App ของ Google Apps Script ที่คุณ Deploy ไว้ที่นี่
+      const webAppUrl = "https://script.google.com/macros/s/AKfycbyYA-j9puYftp8kP_gkKxG-AzAEVxRWjQfVdzKuQRveoEkiHR-ulpqADFdTBG7u3j73/exec"; 
+      
+      const btn = document.getElementById("btnPrint");
+      const statusText = document.getElementById("loadingStatus");
+      
+      // 1. เปลี่ยนสถานะปุ่มและแสดงคำว่ากำลังโหลด (ป้องกันการกดซ้ำ)
+      statusText.style.display = "inline-block";
+      btn.style.pointerEvents = "none";
+      btn.style.opacity = "0.5";
+      btn.innerText = "⏳ กำลังประมวลผล...";
+
+      // 2. เรียกใช้งาน Web App ผ่าน Fetch API
+      fetch(webAppUrl)
+        .then(response => {
+          if (!response.ok) throw new Error("Network response was not ok");
+          return response.json();
+        })
+        .then(res => {
+          if (res.status === "success") {
+            // 3. แปลงค่า Base64 ที่ส่งกลับมาจาก Apps Script ให้กลายเป็นไฟล์ดาวน์โหลด
+            const byteCharacters = atob(res.data);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+              byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: 'application/pdf' });
+            
+            // 4. สั่งดาวน์โหลดไฟล์ลงเครื่องคอมพิวเตอร์ทันที
+            const link = document.createElement('a');
+            link.href = window.URL.createObjectURL(blob);
+            link.download = res.filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          } else {
+            alert("ระบบเกิดข้อผิดพลาด: " + res.message);
+          }
+        })
+        .catch(err => {
+          console.error(err);
+          alert("ไม่สามารถติดต่อ Web App ได้ กรุณาตรวจสอบการตั้งค่าสิทธิ์ (Deployment Permission) หรือ URL");
+        })
+        .finally(() => {
+          // 5. คืนค่าสถานะปุ่มให้กลับมาพร้อมกดใหม่อีกครั้ง
+          statusText.style.display = "none";
+          btn.style.pointerEvents = "auto";
+          btn.style.opacity = "1";
+          btn.innerText = "🖨️ พิมพ์ใบเสร็จ";
+        });
+    }
+  </script>
+
+</body>
+</html>
